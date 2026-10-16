@@ -1,68 +1,92 @@
-# Testing Manual
+# Guia de Testes e Qualidade de Código
 
-## Running Tests
+Este documento descreve como executar a suíte de testes, as verificações estáticas e como estruturar novos testes no **School Secretary**.
 
-### Using Docker (Recommended)
+---
 
-To run all tests at once, in separate and temporary containers, run:
+## 1. Executando os Testes
+
+### Via Docker (Recomendado)
+
+Para executar todos os testes (Frontend e Backend) em containers temporários e isolados (definidos em [`compose.test.yaml`](./compose.test.yaml)):
 
 ```bash
 ./controller.sh test
 
-# or, if running without interaction:
-
+# Para execução sem pausa de confirmação no final (ex.: CI/CD):
 ./controller.sh test --no-confirm
 ```
 
-Which runs [`./scripts/test.sh`](./scripts/test.sh), which creates all containers, runs, tests and deletes them.
+O script [`scripts/test.sh`](./scripts/test.sh) realiza automaticamente:
+1. Limpeza de volumes e containers de teste anteriores.
+2. Build e inicialização dos serviços de teste aguardando os *healthchecks*.
+3. Execução da checagem de tipos, linter e testes unitários do Frontend (`app`).
+4. Execução dos testes automatizados do Backend (`api`).
+5. Remoção automática dos containers e volumes ao finalizar.
 
-### Locally (Manual)
+---
 
-To do this, do the local setup of the site, informed in [INSTALLATION](./INSTALLATION.md), then follow the instructions below:
+### Localmente (Manual)
 
-#### API
+Certifique-se de ter configurado o ambiente conforme o [Guia de Instalação](./INSTALLATION.md).
+
+#### Backend (`api/`)
+Utiliza o framework nativo de testes do Django (`unittest` / `APITestCase`):
 
 ```bash
 cd api/
+
+# Executar toda a suíte de testes
 uv run python manage.py test
+
+# Executar testes de um app específico (users, school, students ou resources)
+uv run python manage.py test school
 ```
 
-#### APP
+#### Frontend (`app/`)
+Utiliza **TypeScript** (`tsc`), **Biome** (formatação e lint) e **Vitest** + **Testing Library** (testes de componentes e hooks):
 
 ```bash
 cd app/
+
+# Executa typecheck + biome check + vitest run
 npm run test
+
+# Comandos individuais de qualidade de código:
+npm run typecheck     # Verifica tipagem TypeScript (tsc --noEmit)
+npm run check         # Analisa formatação e lint com Biome
+npm run check:write   # Corrige problemas de formatação e lint automaticamente
 ```
 
-## Creating Tests
+---
 
-### API
+## 2. Estrutura e Criação de Testes
 
-In [`api/`](./api/) the tests are in specific files for each app:
+### Backend (`api/`)
+Os testes ficam dentro da pasta `tests/` de cada app Django, divididos por responsabilidade:
 
--   [`api/users/tests/test_models.py`](./api/users/tests/test_models.py)
--   [`api/users/tests/test_serializers.py`](./api/users/tests/test_serializers.py)
+- `api/{app}/tests/test_models.py` — Regras de negócio, validações e métodos dos models.
+- `api/{app}/tests/test_serializers.py` — Validação de payloads e serialização de dados.
+- `api/{app}/tests/test_views.py` — Endpoints REST, permissões por papel (RBAC) e ações customizadas.
 
-To create a new test file, just put it inside the `tests/` folder of the Django App (created with `./manage.py startapp`). Remember to follow the `test_*` naming convention for the file.
+> **Convenção:** Todo arquivo de teste deve começar com o prefixo `test_` (ex.: `test_views.py`) para ser descoberto automaticamente pelo `manage.py test`.
 
-### APP
+### Frontend (`app/`)
+Os arquivos de teste ficam **colocalizados** junto ao componente, página, contexto ou hook que testam, utilizando o sufixo `.test.ts` ou `.test.tsx`:
 
-In [`app/`](./app/) the tests are next to their respective `*.tsx` file and must have the name `*.test.tsx`. For example:
+- **Componentes**: `app/src/components/UserInfoCard/index.test.tsx`
+- **Hooks**: `app/src/hooks/useEvent.test.ts`
+- **Contextos**: `app/src/contexts/UserContext.test.tsx`
+- **Páginas**: `app/src/app/(account)/dashboard/page.test.tsx`
 
--   [`UserInfoCard/index.tsx`](./app/src/components/UserInfoCard/index.tsx) is tested by [`UserInfoCard/index.test.tsx`](./app/src/components/UserInfoCard/index.test.tsx)
+---
 
-## User Exception Logging
+## 3. Logs e Monitoramento de Exceções
 
-Follow the previous topics to initialize the project
+O Backend conta com um middleware de captura de exceções ([`api/school/middleware.py`](./api/school/middleware.py)) e configuração de logger em [`api/users/logger.py`](./api/users/logger.py).
 
--   The middleware is in: [`school/middleware.py`](./api/school/middleware.py).
--   Error logs can be viewed with:
+Para acompanhar os logs da API em tempo real quando estiver rodando com Docker:
 
-    ```bash
-    docker compose logs -f school-secretary-api
-
-    # or just watch the output if you have done it locally
-    ```
-
--   To test, trigger an exception in an authenticated view and check the log.
--   The logger can be improved to include more context, format messages or integrate with external systems.
+```bash
+docker compose logs -f api
+```

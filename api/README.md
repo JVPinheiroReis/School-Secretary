@@ -1,335 +1,124 @@
-# API Documentation
+# Documentação da API (Backend)
+
+API RESTful desenvolvida com **Django 5** e **Django REST Framework (DRF)**, responsável pelas regras de negócio, controle de acesso baseado em papéis (RBAC), autenticação JWT e geração de relatórios em PDF.
+
+---
+
+## 1. Visão Geral e Acesso
+
+- **URL Base (via Proxy Docker)**: `http://localhost:8080/api/`
+- **Painel Django Admin**: `http://localhost:8080/api/admin/`
+- **Autenticação**: Tokens JWT via cabeçalho HTTP:
+  ```http
+  Authorization: Bearer <access_token>
+  ```
+
+### Padrão CRUD dos ViewSets
+Todos os recursos listados abaixo utilizam o `ModelViewSet` do DRF e oferecem suporte às operações padrão (respeitando as permissões do usuário):
+- `GET /{recurso}/` — Lista registros (suporta paginação e busca com `?search=`).
+- `POST /{recurso}/` — Cria um novo registro.
+- `GET /{recurso}/{id}/` — Retorna os detalhes de um registro específico.
+- `PUT /{recurso}/{id}/` ou `PATCH /{recurso}/{id}/` — Atualiza um registro.
+- `DELETE /{recurso}/{id}/` — Remove um registro.
+
+---
+
+## 2. Endpoints por Módulo
+
+### Autenticação e Usuários (`/api/users/`)
+
+| Endpoint | Método(s) | Permissão | Descrição |
+| :--- | :--- | :--- | :--- |
+| `/api/users/token/` | `POST` | Público | Autentica com `email` e `password`, retornando os tokens `access` e `refresh`. |
+| `/api/users/token/refresh/` | `POST` | Público | Renova o token `access` a partir de um `refresh` válido. |
+| `/api/users/me/` | `GET` | Autenticado | Retorna os dados completos e o perfil do usuário autenticado. |
+| `/api/users/` | CRUD | `STAFF` | Gerenciamento geral de contas de usuários. |
+
+---
+
+### Gestão Escolar (`/api/school/`)
+
+#### Recursos Principais (CRUD)
+
+| Recurso | Endpoint Base | Leitura (`GET`) | Escrita (`POST`/`PUT`/`DELETE`) | Descrição |
+| :--- | :--- | :--- | :--- | :--- |
+| **Professores** | `/api/school/professors/` | `STAFF` | `STAFF` | Cadastro de professores. |
+| **Matérias** | `/api/school/subjects/` | Autenticado | `STAFF` | Disciplinas escolares. |
+| **Itinerários** | `/api/school/itineraries/` | Autenticado | `STAFF` | Itinerários formativos e grades curriculares. |
+| **Turmas** | `/api/school/groups/` | Autenticado | `STAFF` | Turmas e séries escolares. |
+| **Aulas** | `/api/school/lessons/` | Autenticado | `STAFF` | Horários e alocação de aulas por turma/professor. |
+| **Planejamento Semanal** | `/api/school/weekly-plans/` | Autenticado | `PROFESSOR` | Planejamento semanal de conteúdo e objetivos de aula. |
+| **Agenda** | `/api/school/agenda/` | Autenticado | `PROFESSOR` | Atividades, tarefas e lembretes das turmas. |
+| **Eventos** | `/api/school/events/` | Autenticado | `STAFF` | Eventos escolares e comunicados gerais. |
+| **Inscrições em Eventos** | `/api/school/event-registrations/` | Autenticado | Autenticado | Registro de participação de alunos em eventos. |
+| **Salas** | `/api/school/rooms/` | Autenticado | `STAFF` | Salas de aula e laboratórios. |
+| **Reservas de Sala** | `/api/school/room-reservations/` | Autenticado | `PROFESSOR` | Agendamento de uso de salas por professores. |
+| **Notificações** | `/api/school/notifications/` | Autenticado (próprias) | `STAFF` | Alertas e mensagens direcionadas aos usuários. |
+| **Livros** | `/api/school/books/` | Autenticado | `STAFF` | Catálogo de livros didáticos e acervo. |
+| **Registros Escolares** | `/api/school/schoolrecords/` | `STAFF` | `STAFF` | Histórico e registros administrativos escolares. |
+
+#### Ações Especiais de `/api/school/`
+
+| Endpoint | Método | Descrição |
+| :--- | :--- | :--- |
+| `/api/school/groups/{id}/get-lessons/` | `GET` | Grade semanal de aulas de uma turma específica. |
+| `/api/school/groups/{id}/performance-report/` | `GET` | Relatório de desempenho acadêmico da turma. |
+| `/api/school/groups/{id}/efficiency-analysis/?year=YYYY` | `GET` | Análise de eficiência (taxas de aprovação e evasão) da turma no ano informado. |
+| `/api/school/agenda/pendents/` | `GET` | Lista apenas os itens futuros/pendentes da agenda. |
+| `/api/school/events/pendents/` | `GET` | Lista apenas os próximos eventos escolares. |
+| `/api/school/events/{id}/register/` | `POST` | Inscreve um aluno no evento especificado. |
+| `/api/school/notifications/{id}/mark-read/` | `POST` | Marca uma notificação específica como lida. |
+| `/api/school/notifications/mark-all-read/` | `POST` | Marca todas as notificações do usuário logado como lidas. |
+
+---
+
+### Alunos, Acadêmico e Financeiro (`/api/students/`)
+
+#### Recursos Principais (CRUD)
+
+| Recurso | Endpoint Base | Leitura (`GET`) | Escrita (`POST`/`PUT`/`DELETE`) | Descrição |
+| :--- | :--- | :--- | :--- | :--- |
+| **Alunos** | `/api/students/` | Autenticado | `STAFF` | Cadastro e dados cadastrais de estudantes. |
+| **Notas** | `/api/students/grades/` | Autenticado | `PROFESSOR` | Avaliações e notas por disciplina e bimestre/etapa. |
+| **Frequência** | `/api/students/presences/` | Autenticado | `PROFESSOR` | Registro de presença e faltas por aula/data. |
+| **Responsáveis** | `/api/students/guardians/` | Autenticado | `STAFF` | Pais ou responsáveis legais vinculados aos alunos. |
+| **Matrículas** | `/api/students/enrollments/` | Autenticado | `STAFF` | Vínculo de matrícula do aluno em turmas/anos letivos. |
+| **Contratos** | `/api/students/contracts/` | Autenticado | `STAFF` | Contratos de prestação de serviços educacionais. |
+| **Mensalidades** | `/api/students/tuitions/` | Autenticado | `STAFF` | Cobranças e controle de pagamento de mensalidades. |
+| **Advertências** | `/api/students/warnings/` | Autenticado | `STAFF` | Registros disciplinares de advertência. |
+| **Suspensões** | `/api/students/suspensions/` | Autenticado | `STAFF` | Registros disciplinares de suspensão. |
+
+#### Relatórios, PDFs e Ações Especiais de `/api/students/`
+
+| Endpoint | Método | Descrição |
+| :--- | :--- | :--- |
+| `/api/students/{id}/download-grades/` | `GET` | Gera e baixa o boletim de notas do aluno em **PDF**. |
+| `/api/students/{id}/download-presence/` | `GET` | Gera e baixa o relatório de frequência do aluno em **PDF**. |
+| `/api/students/{id}/academic-report/` | `GET` | Retorna o relatório acadêmico consolidado do aluno em **JSON**. |
+| `/api/students/{id}/download-academic-report/` | `GET` | Gera e baixa o relatório acadêmico completo do aluno em **PDF**. |
+| `/api/students/students-needing-attention/` | `GET` | Lista alunos em situação crítica de notas ou faltas. |
+| `/api/students/efficiency-analysis/?year=YYYY` | `GET` | Análise global de aprovação e evasão escolar no ano informado. |
+| `/api/students/presences/absence-report/` | `GET` | Relatório de alunos com índice de faltas superior a 25%. |
+| `/api/students/contracts/{id}/download-contract/` | `GET` | Gera e baixa o contrato educacional em **PDF**. |
+| `/api/students/tuitions/payment-history/?student_id={id}` | `GET` | Histórico de pagamentos de mensalidades do aluno. |
+| `/api/students/tuitions/financial-report/?student_id={id}` | `GET` | Relatório financeiro do aluno em **JSON**. |
+| `/api/students/tuitions/download-financial-report/?student_id={id}` | `GET` | Gera e baixa o relatório financeiro do aluno em **PDF**. |
 
-## Base URL
+---
 
-When running locally with Docker: `http://localhost:8080/api/`
+### Recursos e Empréstimos (`/api/resources/`)
 
-## Authentication
+| Recurso | Endpoint Base | Leitura (`GET`) | Escrita (`POST`/`PUT`/`DELETE`) | Descrição |
+| :--- | :--- | :--- | :--- | :--- |
+| **Recursos** | `/api/resources/` | Autenticado | `STAFF` | Patrimônio, equipamentos, computadores e materiais escolares. |
+| **Empréstimos** | `/api/resources/loans/` | Autenticado | `STAFF` | Controle de retirada e devolução de recursos por alunos. |
 
-Most endpoints require authentication via JWT tokens. Include the token in the Authorization header:
+---
 
-```
-Authorization: Bearer <your_token>
-```
+## 3. Convenções Internas da API
 
-### Authentication Endpoints
-
--   `POST /api/users/token/` - Login and obtain access/refresh tokens
--   `POST /api/users/token/refresh/` - Refresh access token
-
-## Endpoints by Category
-
-### Users
-
--   `POST /api/users/token/` - Login (obtain JWT tokens)
--   `POST /api/users/token/refresh/` - Refresh JWT token
--   `GET /api/users/me/` - Get current user information
-
-### School Management
-
-#### Subjects (Matérias)
-
--   `GET /api/school/subjects/` - List all subjects
--   `POST /api/school/subjects/` - Create new subject (staff only)
--   `GET /api/school/subjects/{id}/` - Get subject details
--   `PUT /api/school/subjects/{id}/` - Update subject (staff only)
--   `DELETE /api/school/subjects/{id}/` - Delete subject (staff only)
-
-#### Itineraries (Itinerários)
-
--   `GET /api/school/itineraries/` - List all itineraries
--   `POST /api/school/itineraries/` - Create new itinerary (staff only)
--   `GET /api/school/itineraries/{id}/` - Get itinerary details
--   `PUT /api/school/itineraries/{id}/` - Update itinerary (staff only)
--   `DELETE /api/school/itineraries/{id}/` - Delete itinerary (staff only)
-
-#### Groups/Classes (Turmas)
-
--   `GET /api/school/groups/` - List all groups
--   `POST /api/school/groups/` - Create new group (staff only)
--   `GET /api/school/groups/{id}/` - Get group details
--   `PUT /api/school/groups/{id}/` - Update group (staff only)
--   `DELETE /api/school/groups/{id}/` - Delete group (staff only)
--   `GET /api/school/groups/{id}/get-lessons/` - Get weekly lessons schedule for group
--   `GET /api/school/groups/{id}/performance-report/` - Get group performance report
--   `GET /api/school/groups/{id}/efficiency-analysis/?year=2025` - Get efficiency analysis (approval & dropout rates) for group
-
-#### Professors
-
--   `GET /api/school/professors/` - List all professors (staff only)
--   `POST /api/school/professors/` - Create new professor (staff only)
--   `GET /api/school/professors/{id}/` - Get professor details (staff only)
--   `PUT /api/school/professors/{id}/` - Update professor (staff only)
--   `DELETE /api/school/professors/{id}/` - Delete professor (staff only)
-
-#### Lessons (Aulas)
-
--   `GET /api/school/lessons/` - List all lessons
--   `POST /api/school/lessons/` - Create new lesson (staff only)
--   `GET /api/school/lessons/{id}/` - Get lesson details
--   `PUT /api/school/lessons/{id}/` - Update lesson (staff only)
--   `DELETE /api/school/lessons/{id}/` - Delete lesson (staff only)
-
-#### Weekly Lesson Plans (Planejamento Semanal)
-
--   `GET /api/school/weekly-plans/` - List weekly lesson plans (filtered by professor for non-staff)
--   `POST /api/school/weekly-plans/` - Create weekly lesson plan (professors only)
--   `GET /api/school/weekly-plans/{id}/` - Get lesson plan details
--   `PUT /api/school/weekly-plans/{id}/` - Update lesson plan (professor owner only)
--   `DELETE /api/school/weekly-plans/{id}/` - Delete lesson plan (professor owner only)
-
-#### Agenda Items
-
--   `GET /api/school/agenda/` - List all agenda items
--   `POST /api/school/agenda/` - Create new agenda item (professors only)
--   `GET /api/school/agenda/{id}/` - Get agenda item details
--   `PUT /api/school/agenda/{id}/` - Update agenda item (professors only)
--   `DELETE /api/school/agenda/{id}/` - Delete agenda item (professors only)
--   `GET /api/school/agenda/pendents/` - Get upcoming agenda items
-
-#### Events (Eventos)
-
--   `GET /api/school/events/` - List all events
--   `POST /api/school/events/` - Create new event (staff only)
--   `GET /api/school/events/{id}/` - Get event details
--   `PUT /api/school/events/{id}/` - Update event (staff only)
--   `DELETE /api/school/events/{id}/` - Delete event (staff only)
--   `GET /api/school/events/pendents/` - Get upcoming events
--   `POST /api/school/events/{id}/register/` - Register student for event
-
-#### Event Registrations
-
--   `GET /api/school/event-registrations/` - List event registrations
--   `GET /api/school/event-registrations/{id}/` - Get registration details
-
-#### Rooms (Salas)
-
--   `GET /api/school/rooms/` - List all rooms
--   `POST /api/school/rooms/` - Create new room (staff only)
--   `GET /api/school/rooms/{id}/` - Get room details
--   `PUT /api/school/rooms/{id}/` - Update room (staff only)
--   `DELETE /api/school/rooms/{id}/` - Delete room (staff only)
-
-#### Room Reservations (Reservas de Sala)
-
--   `GET /api/school/room-reservations/` - List room reservations
--   `POST /api/school/room-reservations/` - Create reservation (professors only)
--   `GET /api/school/room-reservations/{id}/` - Get reservation details
--   `PUT /api/school/room-reservations/{id}/` - Update reservation (professors only)
--   `DELETE /api/school/room-reservations/{id}/` - Delete reservation (professors only)
-
-#### Notifications (Notificações)
-
--   `GET /api/school/notifications/` - List user's notifications (filtered by user)
--   `POST /api/school/notifications/` - Create notification (staff only)
--   `GET /api/school/notifications/{id}/` - Get notification details
--   `PUT /api/school/notifications/{id}/` - Update notification (staff only)
--   `DELETE /api/school/notifications/{id}/` - Delete notification (staff only)
--   `POST /api/school/notifications/{id}/mark-read/` - Mark notification as read
--   `POST /api/school/notifications/mark-all-read/` - Mark all user notifications as read
-
-#### Books (Livros)
-
--   `GET /api/school/books/` - List all books
--   `POST /api/school/books/` - Create new book (staff only)
--   `GET /api/school/books/{id}/` - Get book details
--   `PUT /api/school/books/{id}/` - Update book (staff only)
--   `DELETE /api/school/books/{id}/` - Delete book (staff only)
-
-#### School Records (Registros Escolares)
-
--   `GET /api/school/schoolrecords/` - List school records (staff only)
--   `POST /api/school/schoolrecords/` - Create school record (staff only)
--   `GET /api/school/schoolrecords/{id}/` - Get record details (staff only)
--   `PUT /api/school/schoolrecords/{id}/` - Update record (staff only)
--   `DELETE /api/school/schoolrecords/{id}/` - Delete record (staff only)
-
-### Students
-
-#### Students (Alunos)
-
--   `GET /api/students/` - List all students
--   `POST /api/students/` - Create new student (staff only)
--   `GET /api/students/{id}/` - Get student details
--   `PUT /api/students/{id}/` - Update student (staff only)
--   `DELETE /api/students/{id}/` - Delete student (staff only)
--   `GET /api/students/{id}/download-grades/` - Download student grades PDF
--   `GET /api/students/{id}/download-presence/` - Download student presence PDF
--   `GET /api/students/{id}/academic-report/` - Get comprehensive academic report (JSON)
--   `GET /api/students/{id}/download-academic-report/` - Download academic report PDF
--   `GET /api/students/students-needing-attention/` - List students needing notifications
--   `GET /api/students/efficiency-analysis/?year=2025` - Get global efficiency analysis (approval & dropout rates)
-
-#### Grades (Notas)
-
--   `GET /api/students/grades/` - List all grades
--   `POST /api/students/grades/` - Create grade (professors only)
--   `GET /api/students/grades/{id}/` - Get grade details
--   `PUT /api/students/grades/{id}/` - Update grade (professors only)
--   `DELETE /api/students/grades/{id}/` - Delete grade (professors only)
-
-#### Presence (Presença)
-
--   `GET /api/students/presences/` - List presence records
--   `POST /api/students/presences/` - Create presence record (professors only)
--   `GET /api/students/presences/{id}/` - Get presence record
--   `PUT /api/students/presences/{id}/` - Update presence record (professors only)
--   `DELETE /api/students/presences/{id}/` - Delete presence record (professors only)
--   `GET /api/students/presences/absence-report/` - Get absence report (students with >25% absences)
-
-#### Warnings (Advertências)
-
--   `GET /api/students/warnings/` - List warnings
--   `POST /api/students/warnings/` - Create warning (staff only)
--   `GET /api/students/warnings/{id}/` - Get warning details
--   `PUT /api/students/warnings/{id}/` - Update warning (staff only)
--   `DELETE /api/students/warnings/{id}/` - Delete warning (staff only)
-
-#### Suspensions (Suspensões)
-
--   `GET /api/students/suspensions/` - List suspensions
--   `POST /api/students/suspensions/` - Create suspension (staff only)
--   `GET /api/students/suspensions/{id}/` - Get suspension details
--   `PUT /api/students/suspensions/{id}/` - Update suspension (staff only)
--   `DELETE /api/students/suspensions/{id}/` - Delete suspension (staff only)
-
-#### Guardians (Responsáveis)
-
--   `GET /api/students/guardians/` - List guardians
--   `POST /api/students/guardians/` - Create guardian (staff only)
--   `GET /api/students/guardians/{id}/` - Get guardian details
--   `PUT /api/students/guardians/{id}/` - Update guardian (staff only)
--   `DELETE /api/students/guardians/{id}/` - Delete guardian (staff only)
-
-#### Contracts (Contratos)
-
--   `GET /api/students/contracts/` - List contracts
--   `POST /api/students/contracts/` - Create contract (staff only)
--   `GET /api/students/contracts/{id}/` - Get contract details
--   `PUT /api/students/contracts/{id}/` - Update contract (staff only)
--   `DELETE /api/students/contracts/{id}/` - Delete contract (staff only)
--   `GET /api/students/contracts/{id}/download-contract/` - Download contract PDF
-
-#### Tuitions (Mensalidades)
-
--   `GET /api/students/tuitions/` - List tuitions
--   `POST /api/students/tuitions/` - Create tuition (staff only)
--   `GET /api/students/tuitions/{id}/` - Get tuition details
--   `PUT /api/students/tuitions/{id}/` - Update tuition (staff only)
--   `DELETE /api/students/tuitions/{id}/` - Delete tuition (staff only)
--   `GET /api/students/tuitions/payment-history/?student_id={id}` - Get payment history
--   `GET /api/students/tuitions/financial-report/?student_id={id}` - Get financial report
--   `GET /api/students/tuitions/download-financial-report/?student_id={id}` - Download financial report PDF
-
-#### Enrollments (Matrículas)
-
--   `GET /api/students/enrollments/` - List enrollments
--   `POST /api/students/enrollments/` - Create enrollment (staff only)
--   `GET /api/students/enrollments/{id}/` - Get enrollment details
--   `PUT /api/students/enrollments/{id}/` - Update enrollment (staff only)
--   `DELETE /api/students/enrollments/{id}/` - Delete enrollment (staff only)
-
-### Resources & Loans (Recursos e Empréstimos)
-
-#### Resources (Recursos)
-
--   `GET /api/resources/` - List all resources (books, computers, equipment)
--   `POST /api/resources/` - Create new resource (staff only)
--   `GET /api/resources/{id}/` - Get resource details
--   `PUT /api/resources/{id}/` - Update resource (staff only)
--   `DELETE /api/resources/{id}/` - Delete resource (staff only)
-
-#### Resource Loans (Empréstimos)
-
--   `GET /api/resources/loans/` - List all loans
--   `POST /api/resources/loans/` - Create new loan (staff only)
--   `GET /api/resources/loans/{id}/` - Get loan details
--   `PUT /api/resources/loans/{id}/` - Update loan (staff only)
--   `DELETE /api/resources/loans/{id}/` - Delete loan (staff only)
-
-## Permissions
-
--   **Public**: No authentication required
--   **Authenticated**: Any logged-in user
--   **Student**: Student role required
--   **Professor**: Professor role required
--   **Staff**: Staff or superuser role required
--   **Superuser**: Superuser role required
-
-## Common Query Parameters
-
--   `search` - Search in specified fields (varies by endpoint)
--   `page` - Page number for pagination
--   `page_size` - Number of results per page
-
-## Response Codes
-
--   `200 OK` - Request successful
--   `201 Created` - Resource created successfully
--   `204 No Content` - Resource deleted successfully
--   `400 Bad Request` - Invalid request data
--   `401 Unauthorized` - Authentication required
--   `403 Forbidden` - Permission denied
--   `404 Not Found` - Resource not found
--   `500 Internal Server Error` - Server error
-
-## Example Usage
-
-### Login
-
-```bash
-curl -X POST http://localhost:8080/api/users/token/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"student@school.com","password":"student123"}'
-```
-
-### Get Student Academic Report
-
-```bash
-curl http://localhost:8080/api/students/1/academic-report/ \
-  -H "Authorization: Bearer <your_token>"
-```
-
-### Get Efficiency Analysis
-
-```bash
-curl http://localhost:8080/api/students/efficiency-analysis/?year=2025 \
-  -H "Authorization: Bearer <your_token>"
-```
-
-### Create Weekly Lesson Plan (Professor)
-
-```bash
-curl -X POST http://localhost:8080/api/school/weekly-plans/ \
-  -H "Authorization: Bearer <your_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "professor": 1,
-    "lesson": 1,
-    "week_start_date": "2025-11-08",
-    "planning_content": "Content for this week",
-    "objectives": "Learning objectives",
-    "resources_needed": "Materials needed"
-  }'
-```
-
-### List Resources
-
-```bash
-curl http://localhost:8080/api/resources/ \
-  -H "Authorization: Bearer <your_token>"
-```
-
-### Create Resource Loan
-
-```bash
-curl -X POST http://localhost:8080/api/resources/loans/ \
-  -H "Authorization: Bearer <your_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "resource": 1,
-    "student": 1,
-    "loan_date": "2025-11-01",
-    "return_date": "2025-11-15"
-  }'
-```
+- **Serializers Compactos**: Para evitar importações circulares e payloads excessivos em relacionamentos aninhados, cada `models.py` possui serializers completos (ex.: `GroupSerializer`) e versões compactas (ex.: `GroupCompactSerializer`) em `serializers.py`.
+- **Geração de PDFs**: Centralizada em [`api/utils/pdfgen.py`](./utils/pdfgen.py), renderizando templates HTML localizados em [`api/templates/`](./templates/).
+- **Parâmetros de Consulta Comuns**:
+  - `?search=<termo>` — Filtra resultados nos campos configurados em `search_fields` de cada ViewSet.
+  - `?page=<n>` e `?page_size=<n>` — Controle de paginação.

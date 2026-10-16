@@ -1,39 +1,26 @@
-# Security Policy
+# Política de Segurança
 
-The [School-Secretary](https://github.com/WebCorvus/School-Secretary) project team takes security issues very seriously. We appreciate your efforts to responsibly disclose any security vulnerabilities you find.
+A equipe do projeto [School Secretary](https://github.com/WebCorvus/School-Secretary) leva a segurança a sério e agradece a divulgação responsável de quaisquer vulnerabilidades encontradas.
 
-## Reporting a Vulnerability
+---
 
-If you discover a security vulnerability, please send an email to **<joaovictorpinheiro1510@gmail.com>**. Please do not create a public issue for the vulnerability.
+## Como Reportar uma Vulnerabilidade
 
-Your email should include the following information:
+Caso identifique uma falha de segurança, **não abra uma Issue pública**. Envie um e-mail diretamente para:
 
-- A description of the vulnerability
-- Steps to reproduce the vulnerability
-- Possible impact of the vulnerability
-- Any suggested mitigation or remediation steps
+- **joaovictorpinheiro1510@gmail.com**
 
-We will respond to your email as soon as possible and work with you to address any security issues.
+Inclua na mensagem:
+1. Descrição clara da vulnerabilidade.
+2. Passos detalhados para reproduzir o problema.
+3. Impacto potencial no sistema ou nos dados dos usuários.
+4. Sugestão de correção ou mitigação (se houver).
 
-## Bug Bounty Program
+---
 
-At this time, we do not offer a bug bounty program. If we decide to introduce one in the future, details will be shared here.
+## Processo de Resposta
 
-## Maintainer Responsibilities
-
-Maintainers are responsible for the security of the project. This includes:
-
-- Responding to security reports in a timely manner
-- Investigating reported vulnerabilities
-- Developing and releasing patches for confirmed vulnerabilities
-- Communicating with the reporting party as the issue is addressed
-- Regularly reviewing and auditing the security of the project
-
-## Disclosures
-
-- We will acknowledge receipt of your report within one business day as soon as possible.
-- We will confirm the vulnerability and determine its impact.
-- We will release a fix as soon as possible, depending on the complexity of the issue.
-- We will communicate the vulnerability and any patches or workarounds to our users.
-
-Thank you for your help in making the [community-standards](https://github.com/dileepadev/community-standards) project a more secure place.
+1. **Confirmação**: Confirmaremos o recebimento do relato o mais rápido possível.
+2. **Análise**: Investigaremos a falha reportada para validar seu impacto e escopo.
+3. **Correção**: Desenvolveremos e publicaremos um patch de correção assim que validado.
+4. **Divulgação**: Notificaremos o autor do relato quando a correção estiver disponível.

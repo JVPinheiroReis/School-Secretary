@@ -1,20 +1,19 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+name: Sugestão de Funcionalidade
+about: Sugira uma nova funcionalidade ou melhoria para o projeto
+title: '[FEAT] '
+labels: 'enhancement'
 assignees: ''
-
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+**Contexto / Problema**
+Descreva qual necessidade ou problema motiva esta sugestão.
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+**Solução Proposta**
+Explique de forma clara como a funcionalidade deveria operar.
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+**Alternativas Consideradas**
+Se houver outras abordagens possíveis para resolver o problema, descreva-as brevemente.
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+**Contexto Adicional**
+Adicione referências, exemplos de tela ou detalhes técnicos relevantes.
