@@ -1,4 +1,4 @@
-FROM python:3.11-alpine3.22
+FROM python:3.13.15-alpine
 
 WORKDIR /api
 
@@ -6,6 +6,8 @@ RUN apk add --no-cache curl
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
+ENV UV_PYTHON_DOWNLOADS=never
+ENV UV_PYTHON=/usr/local/bin/python3
 
 COPY pyproject.toml .
 RUN uv sync

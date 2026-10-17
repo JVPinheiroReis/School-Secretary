@@ -1,3 +1,4 @@
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -46,7 +47,9 @@ from .serializers import (
 
 
 class ProfessorViewSet(viewsets.ModelViewSet):
-    queryset = Professor.objects.all().order_by("full_name")
+    queryset = (
+        Professor.objects.select_related("subject", "user").all().order_by("full_name")
+    )
     serializer_class = ProfessorSerializer
     permission_classes = [IsStaff]
     filter_backends = [filters.SearchFilter]
@@ -91,7 +94,7 @@ class ItineraryViewSet(viewsets.ModelViewSet):
 
 
 class GroupViewSet(viewsets.ModelViewSet):
-    queryset = Group.objects.all().order_by("full_name")
+    queryset = Group.objects.select_related("itinerary").all().order_by("full_name")
     serializer_class = GroupSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -107,10 +110,10 @@ class GroupViewSet(viewsets.ModelViewSet):
             "list",
             "retrieve",
             "get_lessons",
-            "performance_report",
-            "efficiency_analysis",
         ]:
             self.permission_classes = [IsAuthenticated]
+        elif self.action in ["performance_report", "efficiency_analysis"]:
+            self.permission_classes = [IsProfessor]
         else:
             self.permission_classes = [IsStaff]
         return super().get_permissions()
@@ -118,14 +121,19 @@ class GroupViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="get-lessons")
     def get_lessons(self, request, pk=None):
         group = self.get_object()
-        group_lessons = Lesson.objects.filter(group=group)
-        week_lessons = []
+        group_lessons = Lesson.objects.filter(group=group).select_related(
+            "group", "professor", "subject"
+        )
+        lessons_map = {}
+        for lesson in group_lessons:
+            if (lesson.day, lesson.time) not in lessons_map:
+                lessons_map[(lesson.day, lesson.time)] = LessonSerializer(lesson).data
 
+        week_lessons = []
         for day in range(7):
-            day_lessons = []
-            for time in range(LESSONS_PER_DAY):
-                lesson = group_lessons.filter(day=day, time=time + 1).first()
-                day_lessons.append(LessonSerializer(lesson).data if lesson else None)
+            day_lessons = [
+                lessons_map.get((day, time + 1)) for time in range(LESSONS_PER_DAY)
+            ]
             week_lessons.append({"day": get_day_name(day), "lessons": day_lessons})
 
         return Response(week_lessons)
@@ -142,14 +150,22 @@ class GroupViewSet(viewsets.ModelViewSet):
         """Generate efficiency analysis (approval and dropout rates) for group"""
         group = self.get_object()
         year = request.query_params.get("year", None)
-        if year:
-            year = int(year)
+        if year is not None:
+            try:
+                year = int(year)
+            except (ValueError, TypeError):
+                return Response(
+                    {"error": "Invalid year parameter"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         analysis = generate_efficiency_analysis(group, year)
         return Response(analysis)
 
 
 class SchoolRecordViewSet(viewsets.ModelViewSet):
-    queryset = SchoolRecord.objects.all().order_by("-created_at")
+    queryset = (
+        SchoolRecord.objects.select_related("student").all().order_by("-created_at")
+    )
     serializer_class = SchoolRecordSerializer
     permission_classes = [IsStaff]
     filter_backends = [filters.SearchFilter]
@@ -162,7 +178,7 @@ class SchoolRecordViewSet(viewsets.ModelViewSet):
 
 
 class BookViewSet(viewsets.ModelViewSet):
-    queryset = Book.objects.all().order_by("name")
+    queryset = Book.objects.select_related("tenant").all().order_by("name")
     serializer_class = BookSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -183,7 +199,11 @@ class BookViewSet(viewsets.ModelViewSet):
 
 
 class LessonViewSet(viewsets.ModelViewSet):
-    queryset = Lesson.objects.all().order_by("day", "time")
+    queryset = (
+        Lesson.objects.select_related("group", "professor", "subject")
+        .all()
+        .order_by("day", "time")
+    )
     serializer_class = LessonSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -207,7 +227,9 @@ class LessonViewSet(viewsets.ModelViewSet):
 
 
 class AgendaItemViewSet(viewsets.ModelViewSet):
-    queryset = AgendaItem.objects.all().order_by("-date", "-time")
+    queryset = (
+        AgendaItem.objects.select_related("subject").all().order_by("-date", "-time")
+    )
     serializer_class = AgendaItemSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["title", "description", "date"]
@@ -231,7 +253,17 @@ class AgendaItemViewSet(viewsets.ModelViewSet):
 
 
 class WeeklyLessonPlanViewSet(viewsets.ModelViewSet):
-    queryset = WeeklyLessonPlan.objects.all().order_by("-week_start_date")
+    queryset = (
+        WeeklyLessonPlan.objects.select_related(
+            "professor",
+            "lesson",
+            "lesson__group",
+            "lesson__professor",
+            "lesson__subject",
+        )
+        .all()
+        .order_by("-week_start_date")
+    )
     serializer_class = WeeklyLessonPlanSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -264,7 +296,11 @@ class WeeklyLessonPlanViewSet(viewsets.ModelViewSet):
 
 
 class EventViewSet(viewsets.ModelViewSet):
-    queryset = Event.objects.all().order_by("-start_date", "-start_time")
+    queryset = (
+        Event.objects.annotate(registrations_count_annotated=Count("registrations"))
+        .all()
+        .order_by("-start_date", "-start_time")
+    )
     serializer_class = EventSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["title", "description", "location", "start_date"]
@@ -290,9 +326,13 @@ class EventViewSet(viewsets.ModelViewSet):
     def register(self, request, pk=None):
         """Register student in event"""
         event = self.get_object()
-        student = request.user.profile
+        student = (
+            getattr(request.user, "student_profile", None)
+            if getattr(request.user, "role", None) == "STUDENT"
+            else None
+        )
 
-        if not student or not hasattr(student, "id"):
+        if not student:
             return Response(
                 {"error": "Only students can register for events"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -313,7 +353,7 @@ class EventViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        registration, created = EventRegistration.objects.get_or_create(
+        _, created = EventRegistration.objects.get_or_create(
             event=event, student=student
         )
 
@@ -330,7 +370,11 @@ class EventViewSet(viewsets.ModelViewSet):
 
 
 class EventRegistrationViewSet(viewsets.ModelViewSet):
-    queryset = EventRegistration.objects.all().order_by("-registration_date")
+    queryset = (
+        EventRegistration.objects.select_related("event", "student")
+        .all()
+        .order_by("-registration_date")
+    )
     serializer_class = EventRegistrationSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -345,6 +389,17 @@ class EventRegistrationViewSet(viewsets.ModelViewSet):
         else:
             self.permission_classes = [IsStaff]
         return super().get_permissions()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser or getattr(user, "role", None) == "PROFESSOR":
+            return queryset
+        if getattr(user, "role", None) == "STUDENT":
+            return queryset.filter(student__user=user)
+        if getattr(user, "role", None) == "GUARDIAN":
+            return queryset.filter(student__guardians__user=user)
+        return queryset.none()
 
 
 class RoomViewSet(viewsets.ModelViewSet):
@@ -362,7 +417,11 @@ class RoomViewSet(viewsets.ModelViewSet):
 
 
 class RoomReservationViewSet(viewsets.ModelViewSet):
-    queryset = RoomReservation.objects.all().order_by("-date", "-start_time")
+    queryset = (
+        RoomReservation.objects.select_related("room", "reserved_by")
+        .all()
+        .order_by("-date", "-start_time")
+    )
     serializer_class = RoomReservationSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -381,7 +440,9 @@ class RoomReservationViewSet(viewsets.ModelViewSet):
 
 
 class NotificationViewSet(viewsets.ModelViewSet):
-    queryset = Notification.objects.all().order_by("-created_at")
+    queryset = (
+        Notification.objects.select_related("recipient").all().order_by("-created_at")
+    )
     serializer_class = NotificationSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["title", "message", "notification_type"]
@@ -389,9 +450,10 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Users can only see their own notifications"""
+        queryset = super().get_queryset()
         if self.request.user.is_staff or self.request.user.is_superuser:
-            return Notification.objects.all()
-        return Notification.objects.filter(recipient=self.request.user)
+            return queryset
+        return queryset.filter(recipient=self.request.user)
 
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):

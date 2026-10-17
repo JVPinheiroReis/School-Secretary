@@ -7,24 +7,30 @@ Instruções para configurar e executar o **School Secretary** via Docker (recom
 ## 1. Execução com Docker (Recomendado)
 
 ### Pré-requisitos
+
 - **Docker** e **Docker Compose** instalados.
 - **Bash** (Linux/macOS ou Git Bash/WSL no Windows).
 
 ### Passo a Passo
 
 1. **Gere os arquivos de variáveis de ambiente (`.env`)**:
+
    ```bash
    ./controller.sh genenvs
    ```
+
    > Isso copia os arquivos `.env.example` para `.env` dentro de `api/`, `app/`, `db/` e `proxy/`. Em ambientes de produção, revise e altere as credenciais geradas.
 
 2. **Construa e inicie os containers**:
+
    ```bash
    ./controller.sh start
    ```
+
    > O script compila as imagens e aguarda todos os serviços (`db`, `api`, `app` e `proxy`) passarem nos *healthchecks*.
 
 3. **Crie uma conta de superusuário**:
+
    ```bash
    ./controller.sh createsuperuser
    ```
@@ -55,6 +61,7 @@ O script [`controller.sh`](./controller.sh) centraliza as rotinas da pasta [`scr
 Caso deseje rodar o Backend e o Frontend fora do Docker para desenvolvimento direto:
 
 ### Pré-requisitos
+
 - **Python 3.13+** e gerenciador de pacotes [**uv**](https://docs.astral.sh/uv/)
 - **Node.js 20+** e **npm**
 - **PostgreSQL** em execução local (ou ajuste o `.env` da API para apontar para a instância desejada)
@@ -62,13 +69,16 @@ Caso deseje rodar o Backend e o Frontend fora do Docker para desenvolvimento dir
 ### Configurando o Backend (`api/`)
 
 1. Acesse a pasta da API e gere o arquivo `.env`:
+
    ```bash
    cd api/
    cp .env.example .env
    ```
+
    > **Importante:** Edite `api/.env` ajustando `DATABASE_HOST=localhost` (e demais credenciais do seu PostgreSQL local) e remova ou comente `SCRIPT_NAME=/api` se não estiver usando o Nginx na frente.
 
 2. Instale as dependências e aplique as migrações:
+
    ```bash
    uv sync
    uv run python manage.py makemigrations
@@ -76,6 +86,7 @@ Caso deseje rodar o Backend e o Frontend fora do Docker para desenvolvimento dir
    ```
 
 3. Crie um superusuário e inicie o servidor de desenvolvimento:
+
    ```bash
    uv run python manage.py createsuperuser
    uv run python manage.py runserver 8000
@@ -84,13 +95,16 @@ Caso deseje rodar o Backend e o Frontend fora do Docker para desenvolvimento dir
 ### Configurando o Frontend (`app/`)
 
 1. Em outro terminal, acesse a pasta do frontend e gere o arquivo `.env`:
+
    ```bash
    cd app/
    cp .env.example .env
    ```
+
    > **Importante:** Caso esteja rodando sem o proxy Nginx, ajuste `NEXT_PUBLIC_PUBLIC_API_HOST=http://localhost:8000/` e `NEXT_PUBLIC_PRIVATE_API_HOST=http://localhost:8000/` no arquivo `app/.env`.
 
 2. Instale as dependências e inicie o servidor Next.js:
+
    ```bash
    npm install
    npm run dev

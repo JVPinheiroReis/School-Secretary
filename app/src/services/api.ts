@@ -4,6 +4,23 @@ import { NAVIGATION } from '@/config'
 
 const api = axios.create()
 
+let isRefreshing = false
+let failedQueue: Array<{
+    resolve: (token: string) => void
+    reject: (error: unknown) => void
+}> = []
+
+const processQueue = (error: unknown, token: string | null = null) => {
+    for (const prom of failedQueue) {
+        if (error) {
+            prom.reject(error)
+        } else if (token) {
+            prom.resolve(token)
+        }
+    }
+    failedQueue = []
+}
+
 api.interceptors.request.use(
     (config) => {
         const token = getCookie('access')
@@ -25,32 +42,48 @@ api.interceptors.response.use(
 
         // Handle 401 Unauthorized - try to refresh token
         if (error.response?.status === 401 && !originalRequest._retry) {
+            if (isRefreshing) {
+                return new Promise<string>((resolve, reject) => {
+                    failedQueue.push({ resolve, reject })
+                }).then((token) => {
+                    if (!originalRequest.headers) {
+                        originalRequest.headers = axios.AxiosHeaders.from({})
+                    }
+                    originalRequest.headers.Authorization = `Bearer ${token}`
+                    return api(originalRequest)
+                })
+            }
+
             originalRequest._retry = true
+            isRefreshing = true
+
             try {
                 const response = await axios.post(NAVIGATION.AUTH_REFRESH)
                 const { access } = response.data
 
                 setCookie('access', access, { path: '/', sameSite: 'lax' })
 
-                // Dispatch a custom event to notify the app about token refresh
                 if (typeof window !== 'undefined') {
                     window.dispatchEvent(new CustomEvent('tokenRefreshed'))
                 }
+
+                processQueue(null, access)
 
                 if (!originalRequest.headers) {
                     originalRequest.headers = axios.AxiosHeaders.from({})
                 }
                 originalRequest.headers.Authorization = `Bearer ${access}`
 
-                console.log('Token refreshed!')
                 return api(originalRequest)
             } catch (refreshError) {
+                processQueue(refreshError, null)
                 console.error('Refresh token failed', refreshError)
-                // Redirect to login if refresh fails
                 if (typeof window !== 'undefined') {
                     window.location.href = '/'
                 }
                 return Promise.reject(refreshError)
+            } finally {
+                isRefreshing = false
             }
         }
 

@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { ROUTES } from '@/config'
-import api from '@/services/api'
 import { type AgendaItemProps, FakeAgendaItem } from '@/types/agendaItem'
+import { useFetchData } from './useFetchData'
+
+const EMPTY_AGENDA: AgendaItemProps[] = []
+const normalizeArray = (raw: unknown): AgendaItemProps[] =>
+    Array.isArray(raw) ? raw : []
 
 export function useAgenda() {
-    const [data, setData] = useState<AgendaItemProps[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-
     const generateMockAgenda = useCallback((): AgendaItemProps[] => {
         return Array.from({ length: 10 }, (_, i) => ({
             ...FakeAgendaItem,
@@ -16,38 +16,13 @@ export function useAgenda() {
         }))
     }, [])
 
-    const fetchData = useCallback(async () => {
-        setLoading(true)
-        setError(null)
+    const { data, loading, error, refetch } = useFetchData<AgendaItemProps[]>({
+        url: ROUTES.AGENDA,
+        initialData: EMPTY_AGENDA,
+        errorMessage: 'Não foi possível carregar a agenda.',
+        generateMockData: generateMockAgenda,
+        normalizePayload: normalizeArray,
+    })
 
-        try {
-            const response = await api.get(`${ROUTES.AGENDA}`)
-            let payload = Array.isArray(response.data) ? response.data : []
-
-            if (
-                process.env.NODE_ENV === 'development' &&
-                payload.length === 0
-            ) {
-                payload = generateMockAgenda()
-            }
-
-            setData(payload)
-        } catch {
-            if (process.env.NODE_ENV === 'development') {
-                setData(generateMockAgenda())
-                setError(null)
-            } else {
-                setData([])
-                setError('Não foi possível carregar a agenda.')
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [generateMockAgenda])
-
-    useEffect(() => {
-        fetchData()
-    }, [fetchData])
-
-    return { data, loading, error, refetch: fetchData }
+    return { data, loading, error, refetch }
 }

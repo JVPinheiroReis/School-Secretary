@@ -4,7 +4,7 @@ Utility functions for generating comprehensive academic reports
 
 from datetime import timedelta
 
-from django.db.models import Avg, Sum
+from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from school.models import Subject
 from students.models import (
@@ -23,51 +23,54 @@ def generate_student_academic_report(student, year=None):
     if year is None:
         year = timezone.now().year
 
-    # Get all grades by subject and bimester
     grades_by_subject = {}
     all_subjects = Subject.objects.all()
+    student_grades = Grade.objects.filter(student=student, year=year).order_by(
+        "bimester"
+    )
+    grades_map = {}
+    for grade in student_grades:
+        if grade.subject_id not in grades_map:
+            grades_map[grade.subject_id] = {"1B": None, "2B": None, "3B": None, "4B": None}
+        if grade.bimester in grades_map[grade.subject_id]:
+            grades_map[grade.subject_id][grade.bimester] = grade.value
 
     for subject in all_subjects:
-        grades = Grade.objects.filter(
-            student=student, subject=subject, year=year
-        ).order_by("bimester")
-        bimester_grades = {"1B": None, "2B": None, "3B": None, "4B": None}
-
-        for grade in grades:
-            bimester_grades[grade.bimester] = grade.value
-
-        # Calculate average
+        bimester_grades = grades_map.get(
+            subject.id, {"1B": None, "2B": None, "3B": None, "4B": None}
+        )
         valid_grades = [g for g in bimester_grades.values() if g is not None]
         average = sum(valid_grades) / len(valid_grades) if valid_grades else None
 
         grades_by_subject[subject.full_name] = {
             "grades": bimester_grades,
-            "average": round(average, 2) if average else None,
+            "average": round(average, 2) if average is not None else None,
         }
 
-    # Get attendance statistics
-    total_days = Presence.objects.filter(student=student, date__year=year).count()
-    absences = Presence.objects.filter(
-        student=student, presence=False, date__year=year
-    ).count()
-    presences = Presence.objects.filter(
-        student=student, presence=True, date__year=year
-    ).count()
+    # Get attendance statistics in a single aggregate query
+    attendance_stats = Presence.objects.filter(student=student, date__year=year).aggregate(
+        total_days=Count("id"),
+        presences=Count("id", filter=Q(presence=True)),
+        absences=Count("id", filter=Q(presence=False)),
+    )
+    total_days = attendance_stats["total_days"] or 0
+    presences = attendance_stats["presences"] or 0
+    absences = attendance_stats["absences"] or 0
     absence_rate = (absences / total_days * 100) if total_days > 0 else 0
 
     # Get disciplinary records
-    warnings_count = Warning.objects.filter(student=student, date__year=year).count()
-    suspensions_count = Suspension.objects.filter(
+    warnings_qs = Warning.objects.filter(student=student, date__year=year).select_related(
+        "issued_by"
+    )
+    suspensions_qs = Suspension.objects.filter(
         student=student, start_date__year=year
-    ).count()
+    ).select_related("issued_by")
 
-    # Get recent warnings and suspensions
-    recent_warnings = Warning.objects.filter(student=student, date__year=year).order_by(
-        "-date"
-    )[:5]
-    recent_suspensions = Suspension.objects.filter(
-        student=student, start_date__year=year
-    ).order_by("-start_date")[:5]
+    warnings_count = warnings_qs.count()
+    suspensions_count = suspensions_qs.count()
+
+    recent_warnings = warnings_qs.order_by("-date")[:5]
+    recent_suspensions = suspensions_qs.order_by("-start_date")[:5]
 
     return {
         "student_id": student.id,
@@ -110,33 +113,37 @@ def generate_group_performance_report(group):
     """Generate performance report for an entire group/class"""
 
     students = Student.objects.filter(group=group)
-
-    # Overall statistics
     total_students = students.count()
 
-    # Get average grade per subject
-    subjects_performance = []
-    all_subjects = Subject.objects.all()
+    # Get average grade per subject in a single aggregated query
+    subject_stats = (
+        Grade.objects.filter(student__group=group, subject__isnull=False)
+        .values("subject__full_name")
+        .annotate(
+            avg_grade=Avg("value"),
+            students_evaluated=Count("student", distinct=True),
+        )
+        .order_by("subject__full_name")
+    )
 
-    for subject in all_subjects:
-        grades = Grade.objects.filter(student__group=group, subject=subject)
-
-        if grades.exists():
-            avg_grade = grades.aggregate(Avg("value"))["value__avg"]
-            subjects_performance.append(
-                {
-                    "subject": subject.full_name,
-                    "average_grade": round(avg_grade, 2) if avg_grade else None,
-                    "students_evaluated": grades.values("student").distinct().count(),
-                }
-            )
+    subjects_performance = [
+        {
+            "subject": stat["subject__full_name"],
+            "average_grade": round(stat["avg_grade"], 2)
+            if stat["avg_grade"] is not None
+            else None,
+            "students_evaluated": stat["students_evaluated"],
+        }
+        for stat in subject_stats
+    ]
 
     # Attendance statistics
-    total_presences_count = Presence.objects.filter(student__group=group).count()
-
-    absences_count = Presence.objects.filter(
-        student__group=group, presence=False
-    ).count()
+    attendance_stats = Presence.objects.filter(student__group=group).aggregate(
+        total_presences=Count("id"),
+        absences_count=Count("id", filter=Q(presence=False)),
+    )
+    total_presences_count = attendance_stats["total_presences"] or 0
+    absences_count = attendance_stats["absences_count"] or 0
 
     group_absence_rate = (
         (absences_count / total_presences_count * 100)
@@ -144,16 +151,15 @@ def generate_group_performance_report(group):
         else 0
     )
 
-    # Students with high absence rate
+    # Students with high absence rate in a single annotated query
+    annotated_students = students.annotate(
+        total_days=Count("presence"),
+        absences=Count("presence", filter=Q(presence__presence=False)),
+    ).filter(total_days__gt=0)
+
     high_absence_students = []
-    for student in students:
-        total_days = Presence.objects.filter(student=student).count()
-        if total_days == 0:
-            continue
-
-        absences = Presence.objects.filter(student=student, presence=False).count()
-        absence_rate = (absences / total_days) * 100
-
+    for student in annotated_students:
+        absence_rate = (student.absences / student.total_days) * 100
         if absence_rate > 25:
             high_absence_students.append(
                 {
@@ -163,7 +169,6 @@ def generate_group_performance_report(group):
                 }
             )
 
-    # Disciplinary summary
     warnings_count = Warning.objects.filter(student__group=group).count()
     suspensions_count = Suspension.objects.filter(student__group=group).count()
 
@@ -188,31 +193,23 @@ def generate_financial_report(student=None, year=None):
     if year is None:
         year = timezone.now().year
 
+    tuitions = Tuition.objects.select_related("student").filter(
+        reference_month__year=year
+    )
     if student:
-        tuitions = Tuition.objects.filter(
-            student=student, reference_month__year=year
-        ).order_by("-reference_month")
-    else:
-        tuitions = Tuition.objects.filter(reference_month__year=year).order_by(
-            "-reference_month"
-        )
+        tuitions = tuitions.filter(student=student)
+    tuitions = tuitions.order_by("-reference_month")
 
-    # Summary statistics
-    total_pending = tuitions.filter(status="PENDING").count()
-    total_paid = tuitions.filter(status="PAID").count()
-    total_overdue = tuitions.filter(status="OVERDUE").count()
-
-    total_amount_pending = (
-        tuitions.filter(status="PENDING").aggregate(Sum("amount"))["amount__sum"] or 0
+    stats = tuitions.aggregate(
+        total_pending=Count("id", filter=Q(status="PENDING")),
+        total_paid=Count("id", filter=Q(status="PAID")),
+        total_overdue=Count("id", filter=Q(status="OVERDUE")),
+        amount_pending=Sum("amount", filter=Q(status="PENDING")),
+        amount_paid=Sum("amount", filter=Q(status="PAID")),
     )
 
-    total_amount_paid = (
-        tuitions.filter(status="PAID").aggregate(Sum("amount"))["amount__sum"] or 0
-    )
-
-    # Payment history
     payment_history = []
-    for tuition in tuitions[:20]:  # Last 20 payments
+    for tuition in tuitions[:20]:
         payment_history.append(
             {
                 "student_name": tuition.student.full_name if student is None else None,
@@ -228,11 +225,11 @@ def generate_financial_report(student=None, year=None):
 
     return {
         "summary": {
-            "total_pending": total_pending,
-            "total_paid": total_paid,
-            "total_overdue": total_overdue,
-            "amount_pending": float(total_amount_pending),
-            "amount_paid": float(total_amount_paid),
+            "total_pending": stats["total_pending"] or 0,
+            "total_paid": stats["total_paid"] or 0,
+            "total_overdue": stats["total_overdue"] or 0,
+            "amount_pending": float(stats["amount_pending"] or 0),
+            "amount_paid": float(stats["amount_paid"] or 0),
         },
         "payment_history": payment_history,
     }
@@ -243,15 +240,17 @@ def identify_students_needing_notification():
 
     notifications_needed = []
 
-    # Students with high absence rate (>25%)
-    for student in Student.objects.all():
-        total_days = Presence.objects.filter(student=student).count()
-        if total_days == 0:
-            continue
+    students_with_attendance = (
+        Student.objects.prefetch_related("guardians")
+        .annotate(
+            total_days=Count("presence"),
+            absences=Count("presence", filter=Q(presence__presence=False)),
+        )
+        .filter(total_days__gt=0)
+    )
 
-        absences = Presence.objects.filter(student=student, presence=False).count()
-        absence_rate = (absences / total_days) * 100
-
+    for student in students_with_attendance:
+        absence_rate = (student.absences / student.total_days) * 100
         if absence_rate > 25:
             notifications_needed.append(
                 {
@@ -264,26 +263,28 @@ def identify_students_needing_notification():
                 }
             )
 
-    # Students with low grades (average < 6.0)
-    for student in Student.objects.all():
-        grades = Grade.objects.filter(student=student)
-        if grades.exists():
-            avg_grade = grades.aggregate(Avg("value"))["value__avg"]
-            if avg_grade and avg_grade < 6.0:
-                notifications_needed.append(
-                    {
-                        "student_id": student.id,
-                        "student_name": student.full_name,
-                        "guardians": [g.full_name for g in student.guardians.all()],
-                        "reason": "LOW_GRADES",
-                        "details": f"Média geral: {round(avg_grade, 2)}",
-                        "priority": "MEDIUM",
-                    }
-                )
+    students_with_low_grades = (
+        Student.objects.prefetch_related("guardians")
+        .annotate(avg_grade=Avg("grade__value"))
+        .filter(avg_grade__isnull=False, avg_grade__lt=6.0)
+    )
 
-    # Students with overdue payments
-    overdue_tuitions = Tuition.objects.filter(status="OVERDUE").select_related(
-        "student"
+    for student in students_with_low_grades:
+        notifications_needed.append(
+            {
+                "student_id": student.id,
+                "student_name": student.full_name,
+                "guardians": [g.full_name for g in student.guardians.all()],
+                "reason": "LOW_GRADES",
+                "details": f"Média geral: {round(student.avg_grade, 2)}",
+                "priority": "MEDIUM",
+            }
+        )
+
+    overdue_tuitions = (
+        Tuition.objects.filter(status="OVERDUE")
+        .select_related("student")
+        .prefetch_related("student__guardians")
     )
 
     for tuition in overdue_tuitions:
@@ -309,7 +310,6 @@ def calculate_approval_rate(group=None, year=None):
     if year is None:
         year = timezone.now().year
 
-    # Filter students by group if provided
     students_query = Student.objects.all()
     if group:
         students_query = students_query.filter(group=group)
@@ -325,19 +325,18 @@ def calculate_approval_rate(group=None, year=None):
             "group": group.full_name if group else "All groups",
         }
 
+    annotated_students = students_query.annotate(
+        avg_grade=Avg("grade__value", filter=Q(grade__year=year))
+    ).filter(avg_grade__isnull=False)
+
     approved_count = 0
     failed_count = 0
 
-    for student in students_query:
-        # Get all grades for the student in the specified year
-        grades = Grade.objects.filter(student=student, year=year)
-
-        if grades.exists():
-            avg_grade = grades.aggregate(Avg("value"))["value__avg"]
-            if avg_grade and avg_grade >= 6.0:
-                approved_count += 1
-            else:
-                failed_count += 1
+    for student in annotated_students:
+        if student.avg_grade >= 6.0:
+            approved_count += 1
+        else:
+            failed_count += 1
 
     approval_rate = (approved_count / total_students * 100) if total_students > 0 else 0
 
@@ -361,7 +360,6 @@ def calculate_dropout_rate(group=None, year=None):
     if year is None:
         year = timezone.now().year
 
-    # Get enrollments for the year
     enrollments_query = Enrollment.objects.filter(year=year, status="APPROVED")
     if group:
         enrollments_query = enrollments_query.filter(group=group)
@@ -377,28 +375,28 @@ def calculate_dropout_rate(group=None, year=None):
             "group": group.full_name if group else "All groups",
         }
 
-    # Define dropout criteria: no presence records in the last 30 days or absence rate > 75%
     cutoff_date = timezone.now().date() - timedelta(days=30)
+    annotated_enrollments = enrollments_query.annotate(
+        recent_total=Count(
+            "student__presence", filter=Q(student__presence__date__gte=cutoff_date)
+        ),
+        recent_absences=Count(
+            "student__presence",
+            filter=Q(
+                student__presence__date__gte=cutoff_date,
+                student__presence__presence=False,
+            ),
+        ),
+    )
+
     dropout_count = 0
     active_count = 0
 
-    for enrollment in enrollments_query:
-        student = enrollment.student
-
-        # Check if student has any presence records in the last 30 days
-        recent_presences = Presence.objects.filter(
-            student=student, date__gte=cutoff_date
-        )
-
-        if not recent_presences.exists():
-            # No recent presence records - likely dropped out
+    for enrollment in annotated_enrollments:
+        if enrollment.recent_total == 0:
             dropout_count += 1
         else:
-            # Check absence rate
-            total_days = recent_presences.count()
-            absences = recent_presences.filter(presence=False).count()
-            absence_rate = (absences / total_days * 100) if total_days > 0 else 0
-
+            absence_rate = (enrollment.recent_absences / enrollment.recent_total) * 100
             if absence_rate > 75:
                 dropout_count += 1
             else:

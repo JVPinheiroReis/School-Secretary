@@ -10,7 +10,7 @@ Interface web construída com **Next.js 15 (App Router)**, **React 18**, **TypeS
 app/src/
 ├── app/                # Rotas e páginas do Next.js (App Router)
 │   ├── (account)/      # Rotas autenticadas, login e route handlers de sessão
-│   ├── (annoucements)/ # Mural de avisos, agenda, eventos, aulas e notificações
+│   ├── (announcements)/ # Mural de avisos, agenda, eventos, aulas e notificações
 │   ├── (marketing)/    # Páginas institucionais (/about)
 │   └── healthcheck/    # Endpoint de verificação de saúde do container
 ├── components/         # Componentes visuais reutilizáveis e UI (Radix/Tailwind)
@@ -37,10 +37,10 @@ Quando executado via Docker Compose (com Nginx), o frontend responde em `http://
 | `/profile` | `app/(account)/profile/page.tsx` | Privado | Visualização dos dados cadastrais e perfil do usuário logado. |
 | `/week-planning` | `app/(account)/week-planning/page.tsx` | Privado | Consulta e gerenciamento de planejamentos semanais de aula. |
 | `/resources` | `app/(account)/resources/page.tsx` | Privado | Listagem de recursos escolares e controle de empréstimos. |
-| `/agenda` | `app/(annoucements)/agenda/page.tsx` | Privado | Agenda escolar com tarefas e compromissos das turmas. |
-| `/events` | `app/(annoucements)/events/page.tsx` | Privado | Mural de eventos escolares e inscrições. |
-| `/inbox` | `app/(annoucements)/inbox/page.tsx` | Privado | Caixa de entrada de notificações do usuário. |
-| `/lessons` | `app/(annoucements)/lessons/page.tsx` | Privado | Grade de horários e aulas. |
+| `/agenda` | `app/(announcements)/agenda/page.tsx` | Privado | Agenda escolar com tarefas e compromissos das turmas. |
+| `/events` | `app/(announcements)/events/page.tsx` | Privado | Mural de eventos escolares e inscrições. |
+| `/inbox` | `app/(announcements)/inbox/page.tsx` | Privado | Caixa de entrada de notificações do usuário. |
+| `/lessons` | `app/(announcements)/lessons/page.tsx` | Privado | Grade de horários e aulas. |
 | `/about` | `app/(marketing)/about/page.tsx` | Público | Página institucional com informações sobre o sistema. |
 
 ---

@@ -79,3 +79,8 @@ class StudentModelsTest(TestCase):
         self.assertEqual(presence.date, timezone.now().date())
         self.assertTrue(presence.presence)
         self.assertIsNotNone(presence.created_at)
+
+    def test_contract_str_handles_none_relations(self):
+        contract = Contract.objects.create(guardian=None, student=None)
+        self.assertIn("SEM RESPONSÁVEL", str(contract))
+        self.assertIn("SEM ESTUDANTE", str(contract))

@@ -38,7 +38,7 @@ describe('useStudent', () => {
 
         expect(result.current.data).toEqual(mockStudent)
         expect(result.current.error).toBeNull()
-        expect(api.get).toHaveBeenCalledWith(ROUTES.USER_INFO)
+        expect(api.get).toHaveBeenCalledWith(ROUTES.STUDENTS)
     })
 
     it('should handle API error in development by returning FakeStudent', async () => {

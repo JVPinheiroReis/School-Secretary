@@ -161,3 +161,16 @@ class UserSerializersTest(APITestCase):
         self.assertEqual(serializer.data["email"], "no_profile@example.com")
         self.assertEqual(serializer.data["role"], self.User.Role.STAFF)
         self.assertIsNone(serializer.data["profile_details"])
+
+    def test_user_serializer_prevents_non_staff_role_escalation(self):
+        from types import SimpleNamespace
+
+        request = SimpleNamespace(user=self.student_user)
+        serializer = UserSerializer(
+            instance=self.student_user,
+            data={"role": self.User.Role.SUPERUSER},
+            partial=True,
+            context={"request": request},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("role", serializer.errors)

@@ -1,7 +1,7 @@
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
-
 from utils.date import get_current_year, get_today
 from utils.validators import cep_validator, cpf_validator, phone_validator
 
@@ -122,7 +122,13 @@ class Contract(models.Model):
     )
 
     def __str__(self):
-        return f"Contract: {self.guardian.full_name.upper()} e {self.student.full_name.upper()}"
+        guardian_name = (
+            self.guardian.full_name.upper() if self.guardian else "SEM RESPONSÁVEL"
+        )
+        student_name = (
+            self.student.full_name.upper() if self.student else "SEM ESTUDANTE"
+        )
+        return f"Contract: {guardian_name} e {student_name}"
 
     class Meta:
         verbose_name = "Contrato"
@@ -160,7 +166,12 @@ class Grade(models.Model):
         null=True,
     )
 
-    value = models.FloatField(verbose_name="Valor", blank=False, null=True)
+    value = models.FloatField(
+        verbose_name="Valor",
+        blank=False,
+        null=True,
+        validators=[MinValueValidator(0.0), MaxValueValidator(10.0)],
+    )
 
     created_at = models.DateTimeField(
         verbose_name="Criado em",
@@ -176,6 +187,7 @@ class Grade(models.Model):
     class Meta:
         verbose_name = "Nota"
         verbose_name_plural = "Notas"
+        unique_together = ["student", "subject", "year", "bimester"]
 
 
 class Presence(models.Model):

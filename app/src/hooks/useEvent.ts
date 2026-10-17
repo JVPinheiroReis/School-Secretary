@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { ROUTES } from '@/config'
-import api from '@/services/api'
 import { type EventProps, FakeEvent } from '@/types/event'
+import { useFetchData } from './useFetchData'
+
+const EMPTY_EVENTS: EventProps[] = []
+const normalizeArray = (raw: unknown): EventProps[] =>
+    Array.isArray(raw) ? raw : []
 
 export function useEvent() {
-    const [data, setData] = useState<EventProps[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
-
     const generateMockEvents = useCallback((): EventProps[] => {
         return Array.from({ length: 10 }, (_, i) => ({
             ...FakeEvent,
@@ -17,38 +17,13 @@ export function useEvent() {
         }))
     }, [])
 
-    const fetchData = useCallback(async () => {
-        setLoading(true)
-        setError(null)
+    const { data, loading, error, refetch } = useFetchData<EventProps[]>({
+        url: ROUTES.EVENTS,
+        initialData: EMPTY_EVENTS,
+        errorMessage: 'Não foi possível carregar os eventos.',
+        generateMockData: generateMockEvents,
+        normalizePayload: normalizeArray,
+    })
 
-        try {
-            const response = await api.get<EventProps[]>(`${ROUTES.EVENTS}`)
-            let payload = Array.isArray(response.data) ? response.data : []
-
-            if (
-                process.env.NODE_ENV === 'development' &&
-                payload.length === 0
-            ) {
-                payload = generateMockEvents()
-            }
-
-            setData(payload)
-        } catch {
-            if (process.env.NODE_ENV === 'development') {
-                setData(generateMockEvents())
-                setError(null)
-            } else {
-                setData([])
-                setError('Não foi possível carregar os eventos.')
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [generateMockEvents])
-
-    useEffect(() => {
-        fetchData()
-    }, [fetchData])
-
-    return { data, loading, error, refetch: fetchData }
+    return { data, loading, error, refetch }
 }

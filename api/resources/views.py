@@ -21,7 +21,11 @@ class ResourceViewSet(viewsets.ModelViewSet):
 
 
 class ResourceLoanViewSet(viewsets.ModelViewSet):
-    queryset = ResourceLoan.objects.all().order_by("-loan_date")
+    queryset = (
+        ResourceLoan.objects.select_related("resource", "student")
+        .all()
+        .order_by("-loan_date")
+    )
     serializer_class = ResourceLoanSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = [
@@ -37,3 +41,14 @@ class ResourceLoanViewSet(viewsets.ModelViewSet):
         else:
             self.permission_classes = [IsStaff]
         return super().get_permissions()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.is_staff or user.is_superuser or getattr(user, "role", None) == "PROFESSOR":
+            return queryset
+        if getattr(user, "role", None) == "STUDENT":
+            return queryset.filter(student__user=user)
+        if getattr(user, "role", None) == "GUARDIAN":
+            return queryset.filter(student__guardians__user=user).distinct()
+        return queryset.none()

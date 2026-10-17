@@ -79,6 +79,8 @@ class SchoolRecordSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def get_student_details(self, obj):
+        if not obj.student:
+            return None
         from students.serializers import StudentCompactSerializer
 
         return StudentCompactSerializer(obj.student).data
@@ -92,6 +94,8 @@ class BookSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def get_tenant_details(self, obj):
+        if not obj.tenant:
+            return None
         from students.serializers import StudentCompactSerializer
 
         return StudentCompactSerializer(obj.tenant).data
@@ -132,6 +136,8 @@ class EventSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def get_registrations_count(self, obj):
+        if hasattr(obj, "registrations_count_annotated"):
+            return obj.registrations_count_annotated
         return obj.registrations.count()
 
 
@@ -159,6 +165,33 @@ class RoomReservationSerializer(serializers.ModelSerializer):
     class Meta:
         model = RoomReservation
         fields = "__all__"
+
+    def validate(self, attrs):
+        room = attrs.get("room") or getattr(self.instance, "room", None)
+        date = attrs.get("date") or getattr(self.instance, "date", None)
+        start_time = attrs.get("start_time") or getattr(
+            self.instance, "start_time", None
+        )
+        end_time = attrs.get("end_time") or getattr(self.instance, "end_time", None)
+
+        if start_time and end_time and end_time <= start_time:
+            raise serializers.ValidationError(
+                "A hora de término deve ser posterior à hora de início."
+            )
+        if room and date and start_time and end_time:
+            overlapping = RoomReservation.objects.filter(
+                room=room,
+                date=date,
+                start_time__lt=end_time,
+                end_time__gt=start_time,
+            )
+            if self.instance:
+                overlapping = overlapping.exclude(pk=self.instance.pk)
+            if overlapping.exists():
+                raise serializers.ValidationError(
+                    "Esta sala já possui uma reserva conflitante neste horário."
+                )
+        return attrs
 
 
 class NotificationSerializer(serializers.ModelSerializer):

@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { ROUTES } from '@/config'
-import api from '@/services/api'
 import {
     createFakeResource,
     createFakeResourceLoan,
     type ResourceLoanProps,
     type ResourceProps,
 } from '@/types/resources'
+import { useFetchData } from './useFetchData'
+
+const EMPTY_RESOURCES: ResourceProps[] = []
+const EMPTY_LOANS: ResourceLoanProps[] = []
 
 export function useResources() {
-    const [resources, setResources] = useState<ResourceProps[]>([])
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
-
     const generateMockResources = useCallback((): ResourceProps[] => {
         return Array.from({ length: 5 }, (_, i) => ({
             ...createFakeResource(),
@@ -21,48 +20,22 @@ export function useResources() {
         }))
     }, [])
 
-    const fetchResources = useCallback(async () => {
-        setLoading(true)
-        setError(null)
+    const {
+        data: resources,
+        loading,
+        error,
+        refetch: refetchResources,
+    } = useFetchData<ResourceProps[]>({
+        url: ROUTES.RESOURCES,
+        initialData: EMPTY_RESOURCES,
+        errorMessage: 'Não foi possível carregar os recursos.',
+        generateMockData: generateMockResources,
+    })
 
-        try {
-            const response = await api.get<ResourceProps[]>(
-                `${ROUTES.RESOURCES}`,
-            )
-            let payload = response.data
-
-            if (
-                process.env.NODE_ENV === 'development' &&
-                (!payload || payload.length === 0)
-            ) {
-                payload = generateMockResources()
-            }
-
-            setResources(payload)
-        } catch {
-            if (process.env.NODE_ENV === 'development') {
-                setResources(generateMockResources())
-            } else {
-                setError('Não foi possível carregar os recursos.')
-                setResources([])
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [generateMockResources])
-
-    useEffect(() => {
-        fetchResources()
-    }, [fetchResources])
-
-    return { resources, loading, error, refetchResources: fetchResources }
+    return { resources, loading, error, refetchResources }
 }
 
 export function useResourceLoans() {
-    const [resourceLoans, setResourceLoans] = useState<ResourceLoanProps[]>([])
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
-
     const generateMockResourceLoans = useCallback((): ResourceLoanProps[] => {
         return Array.from({ length: 5 }, (_, i) => ({
             ...createFakeResourceLoan(),
@@ -70,46 +43,22 @@ export function useResourceLoans() {
         }))
     }, [])
 
-    const fetchResourceLoans = useCallback(async () => {
-        setLoading(true)
-        setError(null)
-
-        try {
-            const response = await api.get<ResourceLoanProps[]>(
-                `${ROUTES.RESOURCE_LOANS}`,
-            )
-            let payload = response.data
-
-            if (
-                process.env.NODE_ENV === 'development' &&
-                (!payload || payload.length === 0)
-            ) {
-                payload = generateMockResourceLoans()
-            }
-
-            setResourceLoans(payload)
-        } catch {
-            if (process.env.NODE_ENV === 'development') {
-                setResourceLoans(generateMockResourceLoans())
-            } else {
-                setError(
-                    'Não foi possível carregar os empréstimos de recursos.',
-                )
-                setResourceLoans([])
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [generateMockResourceLoans])
-
-    useEffect(() => {
-        fetchResourceLoans()
-    }, [fetchResourceLoans])
+    const {
+        data: resourceLoans,
+        loading,
+        error,
+        refetch: refetchResourceLoans,
+    } = useFetchData<ResourceLoanProps[]>({
+        url: ROUTES.RESOURCE_LOANS,
+        initialData: EMPTY_LOANS,
+        errorMessage: 'Não foi possível carregar os empréstimos de recursos.',
+        generateMockData: generateMockResourceLoans,
+    })
 
     return {
         resourceLoans,
         loading,
         error,
-        refetchResourceLoans: fetchResourceLoans,
+        refetchResourceLoans,
     }
 }

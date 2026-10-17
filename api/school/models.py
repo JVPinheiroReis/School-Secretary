@@ -197,7 +197,7 @@ class Book(models.Model):
         on_delete=models.SET_NULL,
         verbose_name="Locatário",
         related_name="alugated_book",
-        blank=False,
+        blank=True,
         null=True,
     )
 
@@ -474,6 +474,25 @@ class RoomReservation(models.Model):
     class Meta:
         verbose_name = "Reserva de Sala"
         verbose_name_plural = "Reservas de Salas"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValidationError(
+                "A hora de término deve ser posterior à hora de início."
+            )
+        if self.room_id and self.date and self.start_time and self.end_time:
+            overlapping = RoomReservation.objects.filter(
+                room_id=self.room_id,
+                date=self.date,
+                start_time__lt=self.end_time,
+                end_time__gt=self.start_time,
+            ).exclude(pk=self.pk)
+            if overlapping.exists():
+                raise ValidationError(
+                    "Esta sala já possui uma reserva conflitante neste horário."
+                )
 
     def __str__(self):
         return f"{self.room.name} - {self.date} - {self.reserved_by.full_name}"

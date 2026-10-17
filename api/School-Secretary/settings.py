@@ -23,16 +23,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("true", "1", "yes", "on")
+
+
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
     "django-insecure-eixo+uk%943o%jlpqu*i%sr50qsn5lav&8uv2p2s@lsq8a9+kt",
 )
 
-DEBUG = bool(os.environ.get("DEBUG", True))
+DEBUG = _env_bool("DEBUG", True)
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
-USE_X_FORWARDED_HOST = bool(os.environ.get("USE_X_FORWARDED_HOST", False))
+USE_X_FORWARDED_HOST = _env_bool("USE_X_FORWARDED_HOST", False)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -65,7 +72,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = bool(os.environ.get("CORS_ALLOW_ALL_ORIGINS", True))
+CORS_ALLOW_ALL_ORIGINS = _env_bool("CORS_ALLOW_ALL_ORIGINS", True)
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS", "http://127.0.0.1,https://127.0.0.1"
 ).split(",")

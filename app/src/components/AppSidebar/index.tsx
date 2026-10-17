@@ -117,8 +117,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const router = useRouter()
     const { data: user, loading } = useUser()
 
-    function handleClick() {
-        logout()
+    async function handleClick() {
+        await logout()
         router.push('/')
     }
 
@@ -174,7 +174,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarContent>
             <SidebarRail />
             <SidebarFooter>
-                <Button variant={'outline'} onClick={() => handleClick()}>
+                <Button variant={'outline'} onClick={() => void handleClick()}>
                     Logout
                 </Button>
             </SidebarFooter>

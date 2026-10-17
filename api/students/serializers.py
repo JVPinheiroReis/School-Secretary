@@ -131,23 +131,21 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_grades_details(self, obj):
         grades_details_list = []
-
         all_subjects = Subject.objects.all()
+        bimester_index = {"1B": 0, "2B": 1, "3B": 2, "4B": 3}
+
+        grades_by_subject = {}
+        for grade in obj.grade.all():
+            if grade.subject_id not in grades_by_subject:
+                grades_by_subject[grade.subject_id] = [None] * 4
+            idx = bimester_index.get(grade.bimester)
+            if idx is not None:
+                grades_by_subject[grade.subject_id][idx] = grade.value
 
         for subject in all_subjects:
-            grades_for_subject = [None] * 4
-            for grade in obj.grade.filter(subject=subject):
-                if grade.bimester == "1B":
-                    grades_for_subject[0] = grade.value
-                elif grade.bimester == "2B":
-                    grades_for_subject[1] = grade.value
-                elif grade.bimester == "3B":
-                    grades_for_subject[2] = grade.value
-                elif grade.bimester == "4B":
-                    grades_for_subject[3] = grade.value
-
+            grades_for_subject = grades_by_subject.get(subject.id, [None] * 4)
             grades_details_list.append(
-                {"subject": subject.full_name, "grades": grades_for_subject}
+                {"subject": subject.full_name, "grades": list(grades_for_subject)}
             )
 
         return grades_details_list

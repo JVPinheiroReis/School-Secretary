@@ -6,3 +6,4 @@ migrations/*
 .venv
 .env
 .env.example
+uv.lock

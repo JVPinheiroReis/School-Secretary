@@ -157,3 +157,42 @@ class SchoolModelsTest(TestCase):
         self.assertEqual(event.end_time, datetime.time(20, 0))
         self.assertIsNotNone(event.created_at)
         self.assertIsNotNone(event.updated_at)
+
+    def test_room_reservation_conflict_validation(self):
+        from django.core.exceptions import ValidationError
+        from school.models import Room, RoomReservation
+
+        room = Room.objects.create(
+            name="Lab 1", room_type="LABORATORY", capacity=30
+        )
+        subject = Subject.objects.create(short_name="INF", full_name="Informatics")
+        prof_user = self.User.objects.create_user(
+            email="prof_room@example.com", password="password123"
+        )
+        professor = Professor.objects.create(
+            user=prof_user,
+            full_name="Room Professor",
+            phone_number="(86) 98870-1869",
+            cpf="56526047009",
+            birthday="1980-05-10",
+            address="71880729",
+            subject=subject,
+        )
+        RoomReservation.objects.create(
+            room=room,
+            reserved_by=professor,
+            purpose="Class 1",
+            date=datetime.date(2025, 5, 10),
+            start_time=datetime.time(10, 0),
+            end_time=datetime.time(12, 0),
+        )
+        conflicting = RoomReservation(
+            room=room,
+            reserved_by=professor,
+            purpose="Class 2",
+            date=datetime.date(2025, 5, 10),
+            start_time=datetime.time(11, 0),
+            end_time=datetime.time(13, 0),
+        )
+        with self.assertRaises(ValidationError):
+            conflicting.clean()

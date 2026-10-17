@@ -1,7 +1,7 @@
+import axios from 'axios'
 import { setCookie } from 'cookies-next'
 import { type NextRequest, NextResponse } from 'next/server'
 import { ROUTES_INTERNAL } from '@/config'
-import api from '@/services/api'
 
 const DJANGO_LOGIN_URL = ROUTES_INTERNAL.LOGIN
 
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     try {
         const { email, password } = await req.json()
 
-        const response = await api.post(
+        const response = await axios.post(
             DJANGO_LOGIN_URL,
             {
                 email,
